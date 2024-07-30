@@ -1,3 +1,4 @@
+'''
 ################################################################
 # 脚本用来实现电压插值.
 #
@@ -12,7 +13,20 @@
 # - 获得电压分布曲线图
 #
 # Author: Jerome. Date: 20240626
+#
+#################################################################
+#
+# 1st 修改
+# 修改目的：
+# - autotune 的 json 复制后修改后缀为 「***_opt_0.json」在判定 optimise 文件夹不存在时一起处理
+# - 电压插值法优化处理完毕后，在 optimise 文件夹中保留最新的 「***_opt_N.json」
+#   并将最新的 json 文件复制并移动到上级目录 「\InUse」中，重命名为 「***_for_calib_Tune.json」替换原来的文件
+#
+# 修改完成时间：20240730
+#
 ################################################################
+
+'''
 
 import time
 import os
@@ -21,9 +35,7 @@ import tkinter as tk
 from tkinter import filedialog
 import matplotlib.pyplot as plt
 import json
-
-# sys.path.append(r'd:\00_Admin\Jerome\02_PythonScript\PythonFunctionLab')
-
+import shutil
 from Function.envi import ENVI
 from Function.UNSFunction import *
 from datetime import datetime
@@ -219,6 +231,8 @@ def save_xlsx(folder_save_Path, dataBeSave):
     except:
         print('-> Info: Please close csv file and try again.')
 
+
+
 def save_fitting_json(file_path, dataBeSave, json_path, json_index, exemptions_array):
     current_time = datetime.now()
     formatted_time = current_time.strftime("%Y%m%d%H%M")
@@ -235,10 +249,17 @@ def save_fitting_json(file_path, dataBeSave, json_path, json_index, exemptions_a
     check_file_number = glob.glob(f"{folder_save_Path}/*.json")
     file_number = len(check_file_number)
     if file_number == 0:
+        # 将初次 autotune 的 json file 复制并重命名到 optimise 文件夹下
+        primary_file_name = folder_save_Path + f'\\{file_name_without_extension}_opt_0.json'
+        shutil.copy(original_file_name, primary_file_name)
+        print(f'-> Info: This is first time to deal with autotune calib json file.')
+
+        # 建立当下将要生成的 json file 的文件名
         new_file_name = folder_save_Path + f'\\{file_name_without_extension}_opt_{file_number+1}.json'
+
     else:
         file_name_without_extension = re.sub(r'\d+$', '', file_name_without_extension)
-        new_file_name = folder_save_Path + f'\\{file_name_without_extension}{file_number + 1}.json'
+        new_file_name = folder_save_Path + f'\\{file_name_without_extension}{file_number}.json'
     print(f'-> Info: new_file_name is {new_file_name}')
 
     try:
@@ -271,7 +292,14 @@ def save_fitting_json(file_path, dataBeSave, json_path, json_index, exemptions_a
             with open(new_file_name, 'w') as file:
                 json.dump(json_data, file, indent=4)
 
-        print(f'\n-> Info: Successfully saved the file!')
+        print(f'\n-> Info: Successfully saved the optimise file!')
+
+        # 将新生成的 opt 的 json 复制并替换上级目录中的 最终格式的json
+        shutil.copy(new_file_name, original_file_name)
+
+        print(f'\n-> Info: A file with the standard format name was generated as required!')
+
+
         return folder_save_Path
     except FileNotFoundError:
         print(f"文件 '{original_file_name}' 未找到。请确保文件路径正确。")
@@ -664,27 +692,6 @@ def boundary_voltage_calculation(i, MEMS_ID, MEMS_data_array, correction_factor,
         json_voltage.v2[cwl_indx[i] - 1] = MEMS_correct_voltage[2]
         json_voltage.v3[cwl_indx[i] - 1] = MEMS_correct_voltage[3]
         json_voltage.v4[cwl_indx[i] - 1] = MEMS_correct_voltage[4]
-
-        # print(f'{BOLD}{RED}-> Attention: Start a global search{RESET}')
-        # print(f'{BOLD}{RED}-> Attention: Find the global index which is closest to the calculated one!{RESET}')
-        # print(f'{BOLD}{RED}-> Attention: This has the potential to turn the voltage distribution of this MEMS into 2nd order!{RESET}')
-        #
-        # # 找到在 MEMS data array 中，全局最终接近期望的波长对应的索引位置
-        # # 此时的索引对应的是全局的索引，而不是单调区间的索引位置，因为这时候并不知道在哪个单调区间
-        # MEMS_global_correct_indx = find_closest(MEMS_data_array[:, 0], correct_wave)
-        #
-        # # 判断在 LUT 表的哪个单调区间当中，确定有效单调区间
-        # MEMS_global_correct_indx_state = find_voltage_indx_range_in_LUT(MEMS_global_correct_indx, wave_mems_dis)
-        # print(f'-> Info: The global index is in range {MEMS_global_correct_indx_state}')
-        #
-        # # 修正 MEM S电压
-        # MEMS_correct_voltage = MEMS_data_array[MEMS_global_correct_indx, :]
-        #
-        # # 此时对理想情况下这个计算的 band 的修正参数进行更正，并修正判断代码中的 json 对应的电压
-        # delta_cal = MEMS_data_array[MEMS_global_correct_indx, 0] - MEMS_data_array[MEMS_LUT_indx, 0]
-        #
-        # # 修正differ_warning
-        # differ_warning[i] = int(differ_warning[i] - delta_cal)
 
     correction_factor = [cwl_indx, cwl_warning, differ_warning]
 
